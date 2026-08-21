@@ -18,10 +18,24 @@ jobs:
       - name: Install package + test tools
         run: |
           pip install build
-          pip install -e .
-          pip install pytest pytest-asyncio pytest-timeout
+          # `.[dev]` and not `.` -- torch and numpy are OPTIONAL extras here, and
+          # without them every test module skips at import. The first release run
+          # proved it: "3 skipped in 0.03s", pytest exit 5. That exit is the ONLY
+          # thing that stopped an untested artifact reaching PyPI, because a
+          # suite where nothing ran is otherwise indistinguishable from one that
+          # passed. Install what the tests actually need.
+          pip install -e ".[dev]"
+          pip install pytest-timeout
       - name: Run the test suite before publishing
-        run: python -m pytest tests/ -q --timeout=180
+        run: |
+          # `-p no:randomly` is not needed; what IS needed is a floor. pytest
+          # exits 5 when nothing is collected, which reads as a generic failure;
+          # this says what actually happened.
+          python -m pytest tests/ -q --timeout=180 || {
+            rc=$?
+            [ "$rc" = "5" ] && echo "::error::no tests ran - the suite skipped everything, most likely a missing optional dependency. Refusing to publish an untested artifact."
+            exit $rc
+          }
       - name: Build package
         run: python -m build
       - name: Moat guard (inspect built wheel + sdist)
