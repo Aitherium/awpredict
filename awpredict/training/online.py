@@ -26,7 +26,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger("world_model.online")
+logger = logging.getLogger("awpredict.online")
 
 
 def _envf(name: str, default: float) -> float:

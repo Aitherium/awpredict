@@ -59,8 +59,8 @@ _INTERNAL = (
 
 #: Modules whose ABSENCE means the artifact is broken regardless of how clean it
 #: scans. __init__ is the entry point; cli is the command-line interface.
-_KEYSTONES = ("world_model/__init__.py", "world_model/contracts.py",
-              "world_model/core/lewm.py", "world_model/core/mlp.py")
+_KEYSTONES = ("awpredict/__init__.py", "awpredict/contracts.py",
+              "awpredict/core/lewm.py", "awpredict/core/mlp.py")
 
 
 class CouldNotJudgeError(Exception):
@@ -172,20 +172,20 @@ def self_test() -> int:
 
     check("MOAT001 catches a monorepo import",
           any(f.startswith("MOAT001") for f in
-              inspect(wheel({**clean, "world_model/x.py": "from lib.core import X\n"}))), True)
+              inspect(wheel({**clean, "awpredict/x.py": "from lib.core import X\n"}))), True)
 
     check("MOAT002 catches a debt id",
           any("debt-ledger row id" in f for f in
-              inspect(wheel({**clean, "world_model/x.py": "# see D-0000\n"}))), True)
+              inspect(wheel({**clean, "awpredict/x.py": "# see D-0000\n"}))), True)
 
     check("MOAT002 catches a checker rule id",
           any("checker rule id" in f for f in
-              inspect(wheel({**clean, "world_model/x.py": "# MOAT001 says so\n"}))), True)
+              inspect(wheel({**clean, "awpredict/x.py": "# MOAT001 says so\n"}))), True)
 
     # The one that matters most: an EMPTY-of-keystones artifact must NOT pass.
     check("MOAT003 refuses an artifact missing a keystone",
           any(f.startswith("MOAT003") for f in
-              inspect(wheel({"world_model/cli.py": "x=1\n"}))), True)
+              inspect(wheel({"awpredict/cli.py": "x=1\n"}))), True)
 
     # The package's own imports should not be flagged.
     check("does NOT flag the package's own imports",

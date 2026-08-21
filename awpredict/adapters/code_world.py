@@ -12,7 +12,7 @@ Step execution is a loud NotImplementedError: code-world stepping (editing,
 running code) is future work; this adapter is observe/rank-only today.
 
 CONTRACT:
-  Conforms to world_model.contracts.EnvironmentAdapter — stdlib + optional
+  Conforms to awpredict.contracts.EnvironmentAdapter — stdlib + optional
   numpy only, no dependency on any host framework.
 
 USAGE:
@@ -324,7 +324,7 @@ class CodeWorldAdapter:
             "🚨 CodeWorld.step() not implemented in slice 2 — "
             "code-world stepping (execute, edit, navigate) arrives with the ADK sandbox pack. "
             "This adapter is observe + rank only. "
-            "Use world_model.surprise() for anomaly detection, "
+            "Use awpredict.surprise() for anomaly detection, "
             "not for real code execution yet."
         )
 

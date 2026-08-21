@@ -44,7 +44,7 @@ def _fresh_model(monkeypatch, mask_frac: str):
     monkeypatch.setenv("ARC_WM_OBJECT_MASK", mask_frac)
     import importlib
 
-    import world_model.core.lewm as lewm_mod
+    import awpredict.core.lewm as lewm_mod
     importlib.reload(lewm_mod)
     m = lewm_mod.LeWorldModel(device="cpu", seed=7)
     assert m.ok, "torch present but model failed to build"

@@ -17,7 +17,7 @@ if str(PKG_ROOT) not in sys.path:
 
 torch = pytest.importorskip("torch")
 
-from world_model.training.online import OnlineLRController  # noqa: E402
+from awpredict.training.online import OnlineLRController  # noqa: E402
 
 
 class _FakeModel:

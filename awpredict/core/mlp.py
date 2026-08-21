@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-log = logging.getLogger("mlp_world_model")
+log = logging.getLogger("awpredict.core.mlp")
 
 _STATE_DIM = 768
 _ACTION_DIM = 128
@@ -313,7 +313,7 @@ class MLPWorldModel:
     def mode(self) -> str:
         return self._mode
 
-    # -- WorldModel contract surface (world_model.contracts.WorldModel) --------
+    # -- WorldModel contract surface (awpredict.contracts.WorldModel) --------
     # The extracted source predates the contract; these are thin, honest
     # aliases — no new modeling behavior.
 
@@ -371,7 +371,7 @@ class MLPWorldModel:
         del args, kwargs
         logger.warning(
             "MLPWorldModel.plan: no planner in this engine; use "
-            "world_model.core.lewm.LeWorldModel or an external planner"
+            "awpredict.core.lewm.LeWorldModel or an external planner"
         )
         return None
 

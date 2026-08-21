@@ -1,29 +1,29 @@
 # awm — a small, dependency-light world model
 
-`world_model` is a learned-dynamics library: encode an observation to a
+`awpredict` is a learned-dynamics library: encode an observation to a
 latent, predict the next latent given an action, score how surprised the
 model was, optionally plan in latent space. Two engines, a small adapter
 protocol, no framework lock-in.
 
-- **`world_model.core.lewm.LeWorldModel`** — a LeWM-style JEPA (joint-embedding
+- **`awpredict.core.lewm.LeWorldModel`** — a LeWM-style JEPA (joint-embedding
   predictive architecture): a two-term loss (next-latent MSE + SIGReg
   isotropy regularization), a CEM planner, and an optional value head
   (`_ValueHead`/`_FsAdapter`) for value-guided planning — trained on returns
   over a frozen latent, off unless you construct with a value config. This
   is the full engine behind an ARC-AGI-3 solving agent, not a cut-down demo
   of it.
-- **`world_model.core.mlp.MLPWorldModel`** — a lighter embedding-MLP
+- **`awpredict.core.mlp.MLPWorldModel`** — a lighter embedding-MLP
   transition model with a tabular cold-start fallback (tabular → hybrid →
   neural), for when a full JEPA is more machinery than the problem needs.
-- **`world_model.contracts`** — the two Protocols (`WorldModel`,
+- **`awpredict.contracts`** — the two Protocols (`WorldModel`,
   `EnvironmentAdapter`) everything else is written against. Write an adapter
   for your environment; nothing in an engine has to change.
-- **`world_model.adapters.code_world`** — an example adapter mapping a
+- **`awpredict.adapters.code_world`** — an example adapter mapping a
   codebase (landmarks + code chunks) into the engine's observation/action
   space. Reference implementation, not a complete environment.
-- **`world_model.training.online`** — an optional, flag-gated
+- **`awpredict.training.online`** — an optional, flag-gated
   surprise-modulated online learning-rate controller. Off by default. See
-  [`world_model/training/PROVENANCE.md`](world_model/training/PROVENANCE.md)
+  [`awpredict/training/PROVENANCE.md`](awpredict/training/PROVENANCE.md)
   for concept provenance and license boundary — the *concepts* (not code)
   are credited to an external, restricted-license research project; this
   implementation is clean-room.
@@ -43,7 +43,7 @@ pip install -e ".[torch]"   # torch + numpy are optional; engines degrade loudly
 ## Quick use
 
 ```python
-from world_model.core.mlp import MLPWorldModel
+from awpredict.core.mlp import MLPWorldModel
 
 model = MLPWorldModel()
 model.observe(state, action, next_state, reward=0.0, done=False)
@@ -69,11 +69,11 @@ than any positive one.
 Research code. The contracts and degrade-loudly discipline are load-bearing
 and tested (`tests/`); the engines themselves are still moving. `lewm.py` is
 the same file the ARC-AGI-3 solving agent runs, value head included — see
-`world_model/__init__.py` for what's on by default vs. opt-in.
+`awpredict/__init__.py` for what's on by default vs. opt-in.
 
 ## License
 
-MIT (see `LICENSE`). See `world_model/training/PROVENANCE.md` for the one
+MIT (see `LICENSE`). See `awpredict/training/PROVENANCE.md` for the one
 file with an external concept-attribution.
 
 <!-- aitherium-ecosystem:start -->

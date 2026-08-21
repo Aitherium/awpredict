@@ -1,8 +1,8 @@
 """World-model contracts: the two protocols every engine and environment obeys.
 
 These are runtime-checkable Protocols, written to match what the shipped
-engines ACTUALLY expose today (world_model.core.lewm.LeWorldModel, the JEPA
-engine behind an ARC-AGI-3 solving agent, and world_model.core.mlp.MLPWorldModel,
+engines ACTUALLY expose today (awpredict.core.lewm.LeWorldModel, the JEPA
+engine behind an ARC-AGI-3 solving agent, and awpredict.core.mlp.MLPWorldModel,
 a lighter embedding-MLP transition model). They are the seam the rest of the
 program plugs into: adapters map an environment into (observation, action)
 space, an engine learns the dynamics, and every consumer (a solving agent,

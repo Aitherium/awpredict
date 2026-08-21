@@ -54,7 +54,7 @@ def _fresh_model(monkeypatch, *, value_head_on: bool):
     monkeypatch.setenv("ARC_WM_VALUE_HEAD", "1" if value_head_on else "0")
     import importlib
 
-    import world_model.core.lewm as lewm_mod
+    import awpredict.core.lewm as lewm_mod
     importlib.reload(lewm_mod)
     m = lewm_mod.LeWorldModel(device="cpu", seed=7)
     assert m.ok, "torch present but model failed to build"
