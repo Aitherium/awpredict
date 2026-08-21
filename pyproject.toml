@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Renamed from `aither-world-model` 2026-08-21. Free to do, and checked rather
+# than assumed: that name has NEVER published (pypi 404), so nobody depends on
+# it and PyPI history is not being orphaned. `awpredict` reads as "Aither World
+# Predict" like every sibling, and is deliberately not `awwm` -- one letter from
+# `awm` is the shape that already cost this repo a scare with AitherEvents.py
+# beside AitherEventSpine.py.
+name = "awpredict"
+version = "0.1.0"
+description = "A small, dependency-light world-model package: LeWM JEPA + MLP engines, environment adapters"
+requires-python = ">=3.10"
+# torch/numpy are OPTIONAL at import time (engines degrade loudly without them);
+# they are listed here because every real deployment wants them.
+dependencies = []
+
+[project.optional-dependencies]
+torch = ["torch>=2.0", "numpy>=1.24"]
+dev = ["torch>=2.0", "numpy>=1.24", "pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+include = ["world_model*"]
