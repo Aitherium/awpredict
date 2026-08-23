@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1",
+  "name": "awpredict",
+  "description": "Predict what your environment does next, and how surprised you were.",
+  "url": "https://aitherium.github.io/awpredict/",
+  "repository": "https://github.com/Aitherium/awpredict",
+  "kind": "tool",
+  "status": "public",
+  "adopt": "Wrap an environment you already have and ask it what happens next.",
+  "pairs_with": [
+    "awm"
+  ],
+  "includes": [],
+  "metrics": {
+    "files": {
+      "value": 25,
+      "as_of": "2026-08-22T18:47:19-07:00"
+    },
+    "tests": {
+      "value": 4,
+      "as_of": "2026-08-22T18:47:19-07:00"
+    }
+  }
+}
