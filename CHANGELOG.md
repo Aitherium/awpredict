@@ -4,6 +4,8 @@
 
 Initial public release.
 
+- Extracted `world_model.core.lewm.LeWorldModel` (LeWM-style JEPA, value head
+  included), `world_model.core.mlp.MLPWorldModel`, `world_model.contracts`,
 - Extracted `awpredict.core.lewm.LeWorldModel` (LeWM-style JEPA, value head
   included), `awpredict.core.mlp.MLPWorldModel`, `awpredict.contracts`,
   the `code_world` example adapter, and the optional homeostatic online-LR
