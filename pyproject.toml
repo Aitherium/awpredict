@@ -23,3 +23,31 @@ dev = ["torch>=2.0", "numpy>=1.24", "pytest>=7.0"]
 
 [tool.setuptools.packages.find]
 include = ["awpredict*"]
+
+[tool.ruff]
+# Must MATCH the CI gate exactly. tests/test_lint_config_agrees.py asserts that
+# `ruff --isolated --select E,F,I,N,W --ignore E501,E402,E741,N806,N812` and a
+# config-rooted run give the SAME verdict -- without this section the package
+# inherited the monorepo root config, which does not carry those ignores, so the
+# two disagreed and the publish lane refused to ship.
+#
+# N806/N812 are ignored because this is a torch package: `import
+# torch.nn.functional as F` and `B` for batch size are the universal idiom, and
+# a rule that fights the ecosystem convention gets switched off rather than
+# satisfied.
+# line-length is deliberately NOT set: `--isolated` uses ruff's default (88),
+# and line-length changes how import blocks WRAP -- setting 100 here made the
+# two runs sort the same imports differently, which is precisely the
+# disagreement this package's lint test exists to catch.
+
+# `--isolated` runs with no `src`, so it does not detect awpredict as
+# first-party and groups `from awpredict...` with third-party imports. An
+# ambient run detects the same package and wants a blank line before it -- the
+# two then demand OPPOSITE import blocks on the same files, which is the
+# disagreement the lint test catches. Empty `src` makes the local run see what
+# the CI gate sees.
+src = []
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501", "E402", "E741", "N806", "N812"]

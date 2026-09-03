@@ -369,7 +369,7 @@ class MLPWorldModel:
         "no good actions exist", which is a lie.
         """
         del args, kwargs
-        logger.warning(
+        log.warning(
             "MLPWorldModel.plan: no planner in this engine; use "
             "awpredict.core.lewm.LeWorldModel or an external planner"
         )
