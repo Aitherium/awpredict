@@ -24,16 +24,9 @@ Rules of the contract:
 
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    runtime_checkable,
-)
+import math
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 
 @runtime_checkable
@@ -112,3 +105,284 @@ def conforms(obj: Any, proto: type) -> List[str]:
         if not hasattr(obj, name):
             missing.append(name)
     return sorted(missing)
+
+
+# =============================================================================
+# The PROBLEM contract — what turns "an environment" into "a thing being solved"
+# =============================================================================
+#
+# An EnvironmentAdapter tells you what the world does. It does not tell you
+# whether you are winning. The ARC-AGI-3 solving lane learned that the hard
+# way: every layer of the solver (memory, hypothesis council, MCTS, the value
+# head, the JEPA world model) became real only once a SCORER existed that could
+# refuse — a held-out level count, an A/B against the bare model, a latent
+# health band. Before that, a run that learned nothing and a run that explored
+# honestly and found nothing printed the same line.
+#
+# So a Problem is three things, and all three are data, not code:
+#   * an adapter reference  — the world (observe / actions / step)
+#   * a scorer reference    — the judge, which may REFUSE to judge
+#   * a budget              — the hard stop that makes a run a run
+#
+# and every solving run emits the SAME four records regardless of domain:
+# Transition (what happened), Attempt (how this try went), Fact (what was
+# learned, scoped), Outcome (the verdict that a learner consumes). One record
+# shape per role means a loop over ARC, over a kernel harness, over a fleet
+# defect and over a browser can be replayed, compared and trained on by one
+# consumer. Six rival shapes existed in the monorepo when this was written;
+# these are their union, kept small.
+#
+# Rules (asserted by tests/test_problem_contracts.py):
+#   * A scorer returns Score OR Refusal — NEVER None, NEVER 0.0 for "could not
+#     judge". `check_score()` names anything else as a defect. A silent zero is
+#     the worst failure this contract can have: the loop keeps running and
+#     optimises a number nobody produced.
+#   * Score.value is finite. NaN/inf is a programming error and raises.
+#   * `baseline` on an Outcome is required to be SET before `kept` means anything;
+#     the first honest scorer for a learned model is "beats the self-updating
+#     lookup on the rows that are actually novel" — never an aggregate.
+#   * memory_scope is awm-shaped: exactly three ':'-separated segments,
+#     `tenant:user:project`, `*` for "not narrowed". A Fact never crosses it.
+
+
+@dataclass(frozen=True)
+class Score:
+    """One measurement a scorer stands behind.
+
+    ``strict_ok`` mirrors the harness `--strict` exit-code contract: False means
+    the candidate was WRONG (not merely slow), and a loop must treat the trial as
+    a revert regardless of ``value``.
+    """
+
+    metric: str
+    value: float
+    minimize: bool = False
+    strict_ok: bool = True
+    evidence: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.metric:
+            raise ValueError("Score.metric must be a non-empty name")
+        v = float(self.value)
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError(f"Score.value must be finite, got {self.value!r}")
+        object.__setattr__(self, "value", v)
+
+    def better_than(self, baseline: Optional[float]) -> bool:
+        """Is this score an improvement over ``baseline``? A wrong candidate never is."""
+        if not self.strict_ok:
+            return False
+        if baseline is None:
+            return True
+        return self.value < baseline if self.minimize else self.value > baseline
+
+
+@dataclass(frozen=True)
+class Refusal:
+    """A scorer's honest 'I could not judge this'. Carries WHY; never a number."""
+
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason:
+            raise ValueError("Refusal.reason must say why the scorer could not judge")
+
+
+@runtime_checkable
+class Scorer(Protocol):
+    """Judges one episode. May refuse. Must never return nothing."""
+
+    metric: str
+    minimize: bool
+
+    def score(self, episode: Any) -> "Score | Refusal":
+        """Return a Score, or a Refusal naming why no score is possible."""
+
+
+def check_score(result: Any) -> List[str]:
+    """Name what is wrong with a scorer's return value (empty == acceptable).
+
+    The point of this helper is the None/0.0 case: a scorer that returns nothing
+    is not a scorer that scored zero, and a loop that cannot tell the two apart
+    will ratchet on silence.
+    """
+    problems: List[str] = []
+    if result is None:
+        problems.append("scorer returned None — a refusal must be a Refusal(reason=...)")
+    elif isinstance(result, (int, float)) and not isinstance(result, bool):
+        problems.append("scorer returned a bare number — wrap it in Score(metric=..., value=...)")
+    elif not isinstance(result, (Score, Refusal)):
+        problems.append(f"scorer returned {type(result).__name__}; expected Score or Refusal")
+    return problems
+
+
+@dataclass(frozen=True)
+class Budget:
+    """The hard stop. Zero means 'not bounded on this axis'; at least one axis must bind."""
+
+    steps: int = 80
+    seconds: float = 0.0
+    tokens: int = 0
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if self.steps < 0 or self.seconds < 0 or self.tokens < 0:
+            out.append("budget axes must be >= 0")
+        if self.steps == 0 and self.seconds == 0 and self.tokens == 0:
+            out.append("budget binds on no axis — a run with no stop is not a run")
+        return out
+
+
+def _looks_like_ref(ref: str) -> bool:
+    mod, sep, name = (ref or "").partition(":")
+    return bool(sep) and bool(mod) and bool(name) and " " not in ref
+
+
+def scope_problems(scope: str) -> List[str]:
+    """awm scope rule: exactly three ':' segments, none empty; '*' = not narrowed."""
+    parts = (scope or "").split(":")
+    if len(parts) != 3:
+        return [f"memory_scope must be tenant:user:project (3 segments), got {scope!r}"]
+    if any(not p for p in parts):
+        return [f"memory_scope has an empty segment: {scope!r}"]
+    return []
+
+
+@dataclass
+class ProblemSpec:
+    """A problem, as data: the world, the judge, the stop, and where memory goes.
+
+    ``adapter_ref`` / ``scorer_ref`` are ``"package.module:ClassName"`` strings.
+    Loading them is the RUNNER's job (and the runner's import boundary); this
+    module only says whether the spec is well-formed. ``planner`` is explicit on
+    purpose: the ARC solver's MCTS/value-head planner was gated behind a CHAIN of
+    three env flags, and setting the obvious one alone was a silent no-op.
+    """
+
+    problem_id: str
+    domain: str
+    adapter_ref: str
+    scorer_ref: str
+    budget: Budget = field(default_factory=Budget)
+    memory_scope: str = "platform:*:*"
+    planner: str = "none"  # "none" | "mcts" | "cem" | "council" | engine-specific
+    success: Optional[str] = None
+    adapter_kwargs: Dict[str, Any] = field(default_factory=dict)
+    scorer_kwargs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.problem_id:
+            out.append("problem_id is required")
+        if not self.domain:
+            out.append("domain is required")
+        for label, ref in (("adapter_ref", self.adapter_ref), ("scorer_ref", self.scorer_ref)):
+            if not _looks_like_ref(ref):
+                out.append(f"{label} must be 'package.module:ClassName', got {ref!r}")
+        out.extend(self.budget.problems())
+        out.extend(scope_problems(self.memory_scope))
+        return out
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, raw: Dict[str, Any]) -> "ProblemSpec":
+        data = dict(raw)
+        budget = data.pop("budget", None) or {}
+        if isinstance(budget, Budget):
+            b = budget
+        else:
+            b = Budget(**{k: budget[k] for k in ("steps", "seconds", "tokens") if k in budget})
+        return cls(budget=b, **data)
+
+
+@dataclass
+class Transition:
+    """One (obs, action, next_obs) the world produced. The unit every learner eats."""
+
+    domain: str
+    episode: str
+    step: int
+    obs: Any
+    action: Any
+    next_obs: Any
+    reward: float = 0.0
+    done: bool = False
+    surprise: Optional[float] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class Attempt:
+    """How one try at one problem went — the ARC attempt ledger, made domain-neutral."""
+
+    domain: str
+    problem_id: str
+    episode: str
+    steps: int
+    score: Optional[Score] = None
+    refusal: Optional[Refusal] = None
+    first_effect_step: Optional[int] = None
+    opening_actions: List[Any] = field(default_factory=list)
+    trajectory: List[float] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class Fact:
+    """Something learned, pinned to a scope it may never leave."""
+
+    memory_scope: str
+    relation: str
+    fact: str
+    confidence: float = 0.7
+    source_episode: str = ""
+
+    def problems(self) -> List[str]:
+        out = scope_problems(self.memory_scope)
+        if not (0.0 <= float(self.confidence) <= 1.0):
+            out.append(f"confidence must be in [0,1], got {self.confidence!r}")
+        if not self.relation or not self.fact:
+            out.append("relation and fact are both required")
+        return out
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class Outcome:
+    """The verdict a learner consumes. One per episode, whatever the domain."""
+
+    problem_id: str
+    domain: str
+    episode: str
+    score: Optional[Score] = None
+    refusal: Optional[Refusal] = None
+    baseline: Optional[float] = None
+    kept: Optional[bool] = None
+    transitions_n: int = 0
+    facts_n: int = 0
+    duration_ms: float = 0.0
+    model_used: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if self.score is None and self.refusal is None:
+            out.append("an Outcome carries a Score or a Refusal — never neither")
+        if self.score is not None and self.refusal is not None:
+            out.append("an Outcome carries a Score or a Refusal — never both")
+        if self.kept is not None and self.baseline is None:
+            out.append("kept is meaningless without a baseline — set baseline first")
+        return out
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)

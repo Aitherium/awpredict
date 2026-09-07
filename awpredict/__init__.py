@@ -19,8 +19,37 @@ Torch and numpy are OPTIONAL at import time — engines degrade loudly
 (ok == False), never raise into a caller.
 """
 
-from awpredict.contracts import EnvironmentAdapter, WorldModel, conforms
+from awpredict.contracts import (
+    Attempt,
+    Budget,
+    EnvironmentAdapter,
+    Fact,
+    Outcome,
+    ProblemSpec,
+    Refusal,
+    Score,
+    Scorer,
+    Transition,
+    WorldModel,
+    check_score,
+    conforms,
+)
 
 __version__ = "0.1.0"
 
-__all__ = ["EnvironmentAdapter", "WorldModel", "conforms", "__version__"]
+__all__ = [
+    "Attempt",
+    "Budget",
+    "EnvironmentAdapter",
+    "Fact",
+    "Outcome",
+    "ProblemSpec",
+    "Refusal",
+    "Score",
+    "Scorer",
+    "Transition",
+    "WorldModel",
+    "check_score",
+    "conforms",
+    "__version__",
+]
