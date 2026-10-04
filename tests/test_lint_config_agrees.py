@@ -27,10 +27,21 @@ from pathlib import Path
 import pytest
 
 PKG = Path(__file__).resolve().parent.parent
-HAVE_RUFF = shutil.which("ruff") is not None or bool(
-    subprocess.run([sys.executable, "-m", "ruff", "--version"],
-                   capture_output=True).returncode == 0
-)
+
+
+def _ruff_cmd() -> list[str] | None:
+    """The ruff this test will RUN -- the same one it detected. Detecting a PATH ruff
+    but running `python -m ruff` failed with "No module named ruff" in any env that
+    has the binary but not the module, a red test with nothing wrong with the lint."""
+    if subprocess.run([sys.executable, "-m", "ruff", "--version"],
+                      capture_output=True).returncode == 0:
+        return [sys.executable, "-m", "ruff"]
+    exe = shutil.which("ruff")
+    return [exe] if exe else None
+
+
+RUFF = _ruff_cmd()
+HAVE_RUFF = RUFF is not None
 
 
 def _ruff(*args: str) -> tuple[int, str]:
@@ -39,7 +50,7 @@ def _ruff(*args: str) -> tuple[int, str]:
     # here). The resulting UnicodeDecodeError is a ValueError, which no
     # OSError/SubprocessError guard catches — so the guard would crash instead of
     # reporting a verdict, on a machine where the lint is perfectly fine.
-    r = subprocess.run([sys.executable, "-m", "ruff", "check", *args, str(PKG)],
+    r = subprocess.run([*(RUFF or ["ruff"]), "check", *args, str(PKG)],
                        capture_output=True, text=True, encoding="utf-8",
                        errors="replace", cwd=PKG.parents[3])
     return r.returncode, (r.stdout + r.stderr)
