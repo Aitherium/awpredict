@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — 2026-10-04
+
+- The Problem contract: `ProblemSpec`, a `Scorer` that can refuse, and one record
+  shape per role (`Attempt` among them) — what awgym 0.1.1 imports.
+- A command-line interface.
+- The doctor's own measured NO now reaches its exit code.
+
 ## 0.1.0 — 2026-08-18
 
 Initial public release.
