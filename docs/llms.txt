@@ -1,0 +1,33 @@
+# awpredict
+
+> Predict what your environment does next, and how surprised you were.
+
+An agent that cannot anticipate its environment can only react. Every framework that offers this makes you adopt its whole training stack to find out whether a learned model beats the lookup table you already have.
+
+## Install
+
+```
+pip install git+https://github.com/Aitherium/awpredict.git
+```
+
+## In Claude Code
+
+- skill: `/awpredict`
+
+## Use it in 30 seconds
+
+Wrap an environment you already have and ask it what happens next.
+
+## Composes with
+
+- [awm](https://aitherium.github.io/awm/) — A portable, scoped agent memory.
+
+## Where it lives
+
+- Repo: https://github.com/Aitherium/awpredict
+- Docs: https://aitherium.github.io/awpredict/
+- Manifest (keys + the one-line adoption story): https://aitherium.github.io/awpredict/aither-manifest.json
+
+This repository is mirrored from the AitherOS monorepo by `.github/workflows/sync-awpredict.yml`; hand edits made here are overwritten on the next sync — change the source instead.
+
+Everything Aitherium, in one file for agents: https://aitherium.com/llms.txt
