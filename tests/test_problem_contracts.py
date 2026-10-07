@@ -82,6 +82,24 @@ def test_scorer_conformance():
     assert isinstance(_GoodScorer(), Scorer)
 
 
+def test_protocol_members_fallback_matches_the_stdlib():
+    """The pre-3.12 fallback must name exactly what 3.12+ ``__protocol_attrs__``
+    names -- otherwise conforms() is right on one Python and wrong on another.
+
+    Below 3.12 there is no stdlib answer to compare against, so this pins the
+    fallback where there is one; the conformance test above proves the
+    fallback directly on 3.10/3.11 (it failed open there before, 2026-10-07).
+    """
+    from awpredict.contracts import _derive_protocol_members
+
+    for proto in (EnvironmentAdapter, Scorer):
+        stdlib = getattr(proto, "__protocol_attrs__", None)
+        if stdlib is None:
+            pytest.skip("no __protocol_attrs__ before Python 3.12 -- nothing to compare")
+        derived = _derive_protocol_members(proto)
+        assert derived == set(stdlib), (proto.__name__, derived ^ set(stdlib))
+
+
 # ------------------------------------------------------------------- the scorer
 def test_scorer_may_refuse_and_a_refusal_carries_why():
     out = _GoodScorer().score([])

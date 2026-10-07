@@ -103,17 +103,59 @@ class EnvironmentAdapter(Protocol):
         """
 
 
+#: Class-namespace names that are machinery, not protocol members. The union of
+#: CPython's pre-3.12 _get_protocol_attrs exclusions and the names 3.12/3.13
+#: added to class namespaces, so the fallback agrees with __protocol_attrs__.
+_NOT_MEMBERS = frozenset({
+    "__abstractmethods__", "__annotations__", "__weakref__", "_is_protocol",
+    "_is_runtime_protocol", "__dict__", "__args__", "__slots__", "__next_in_mro__",
+    "__parameters__", "__origin__", "__orig_bases__", "__extra__", "__tree_hash__",
+    "__doc__", "__subclasshook__", "__init__", "__new__", "__module__",
+    "_MutableMapping__marker", "_gorg", "__protocol_attrs__",
+    "__non_callable_proto_members__", "__type_params__", "__qualname__",
+    "__firstlineno__", "__static_attributes__", "__annotate__",
+    "__annotate_func__", "__annotations_cache__",
+})
+
+
+def protocol_members(proto: type) -> set:
+    """The member names a Protocol requires, on every supported Python.
+
+    ``__protocol_attrs__`` exists only on Python 3.12+. Reading it with a
+    ``set()`` default made :func:`conforms` FAIL OPEN on 3.10/3.11 -- it
+    iterated nothing and approved every object -- while the package declares
+    ``requires-python >= 3.10``. Measured 2026-10-07 on the public mirror's
+    first CI run: 3.12 named ``['actions', 'step']`` for a half-built adapter,
+    3.10 returned ``[]``. Below 3.12 the members are derived the way CPython's
+    own pre-3.12 ``_get_protocol_attrs`` did; a parity test pins the two
+    against each other on any 3.12+ interpreter.
+    """
+    attrs = getattr(proto, "__protocol_attrs__", None)
+    if attrs is not None:
+        return set(attrs)
+    return _derive_protocol_members(proto)
+
+
+def _derive_protocol_members(proto: type) -> set:
+    """The pre-3.12 derivation, split out so a test can pin it to the stdlib."""
+    names = set()
+    for base in proto.__mro__[:-1]:  # without object
+        if base.__name__ in ("Protocol", "Generic"):
+            continue
+        annotations = base.__dict__.get("__annotations__", {})
+        for name in list(base.__dict__) + list(annotations):
+            if not name.startswith("_abc_") and name not in _NOT_MEMBERS:
+                names.add(name)
+    return names
+
+
 def conforms(obj: Any, proto: type) -> List[str]:
     """Return the members of ``proto`` that ``obj`` is missing (empty == conforms).
 
     Protocol ``isinstance`` checks only see attribute presence; this helper
     names what is absent so a failing conformance check says WHY.
     """
-    missing = []
-    for name in getattr(proto, "__protocol_attrs__", set()):
-        if not hasattr(obj, name):
-            missing.append(name)
-    return sorted(missing)
+    return sorted(name for name in protocol_members(proto) if not hasattr(obj, name))
 
 
 # =============================================================================
