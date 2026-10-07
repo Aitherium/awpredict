@@ -11,6 +11,10 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    # Bounded: GitHub's default is 6 HOURS. awvoice's listen suite blocks on a
+    # missing audio device (measured 2026-10-07) -- unbounded, one such test
+    # holds a runner for the whole default and reads as "CI is slow".
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          python -c "import awpredict"
+          awpredict --help >/dev/null 2>&1 || awpredict --version >/dev/null 2>&1 || python -c "import awpredict"
       - name: tests
         if: ${{ hashFiles('tests/**', 'test/**') != '' }}
         shell: bash
