@@ -334,6 +334,33 @@ class MLPWorldModel:
             return None
         return self._hash_state_embedding(str(obs))
 
+    def predict_latent(self, z: Any, action: Any) -> Optional[List[float]]:
+        """Latent → predicted next latent through the neural transition net.
+
+        ``predict`` answers in state HASHES (the tabular contract), which cannot
+        be fed back into the model; this is the vector-space step a rollout or
+        a visualizer needs. ``z`` is an ``encode()`` output or a previous
+        ``predict_latent()`` output. None until the neural path has trained, or
+        when torch is missing — never a fabricated vector.
+        """
+        if z is None or not self._neural_available or not self._encoder.is_available:
+            return None
+        try:
+            if isinstance(z, torch.Tensor):
+                state = z.detach().float().reshape(-1)
+            else:
+                state = torch.tensor(list(z), dtype=torch.float32)
+            if state.numel() != self._state_dim:
+                return None
+            a = self._action_encoder.encode(action)
+            if not isinstance(a, torch.Tensor):
+                a = torch.tensor(a, dtype=torch.float32)
+            nxt, _, _ = self._encoder.predict(state, a.detach())
+            return nxt.tolist()
+        except (RuntimeError, TypeError, ValueError) as e:
+            log.debug(f"predict_latent failed: {e}")
+            return None
+
     def surprise(
         self,
         obs: int,

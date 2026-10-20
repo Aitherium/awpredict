@@ -2,6 +2,7 @@
 
   engines   which engines can actually construct here, and why not if they cannot
   conforms  does a class satisfy WorldModel or EnvironmentAdapter, and what is missing
+  viz       see what an engine imagines: dream filmstrip/heatmap + error vs copy-last
 
 --json for machine-readable output.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+from pathlib import Path
 from typing import List
 
 from . import contracts
@@ -82,6 +84,56 @@ def cmd_conforms(args) -> int:
     return 0 if not missing else 1
 
 
+def cmd_viz(args) -> int:
+    """Write a dream-visualizer HTML page.
+
+    Exit 0 written, 1 the engine produced no rollout (nothing worth a page),
+    2 could not run (torch/numpy missing, no data source) -- never 0 on nothing.
+    """
+    if not args.demo:
+        print("viz: only --demo is wired on the command line; from Python call "
+              "awpredict.viz.dream_report(model, observations, actions) and "
+              "awpredict.viz.render_html(report) on your own trained engine")
+        return 2
+    try:
+        from . import viz, viz_demo
+    except ImportError as exc:
+        print(f"viz: cannot import the visualizer: {exc}")
+        return 2
+    try:
+        model, obs, acts, meta = viz_demo.DEMOS[args.engine](steps=args.steps)
+        report = viz.dream_report(model, obs, acts, steps=args.steps)
+    except viz.VizUnavailableError as exc:
+        print(f"viz: cannot run the {args.engine} demo: {exc}")
+        return 2
+    report["meta"] = meta
+    for name in ("one_step", "rollout"):
+        b = report[name]
+        print(f"  {name:<9} model {_num(b['model_mean'])}  copy-last "
+              f"{_num(b['copy_last_mean'])}  "
+              f"{'beats' if b['beats_copy_last'] else 'does NOT beat'} copy-last")
+    if not report["ok"]:
+        print(f"viz: {args.engine} produced no rollout: {report['reason']}")
+        return 1
+    out = Path(args.out or f"awpredict-dream-{args.engine}.html")
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(viz.render_html(report), encoding="utf-8")
+    except OSError as exc:
+        print(f"viz: cannot write {out}: {exc}")
+        return 2
+    if args.json:
+        print(json.dumps({"out": str(out), "ok": True,
+                          "one_step": report["one_step"], "rollout": report["rollout"],
+                          "pixel": report["pixel"]}, indent=2))
+    print(f"wrote {out.resolve()}")
+    return 0
+
+
+def _num(x) -> str:
+    return "n/a" if x is None else f"{x:.4g}"
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="awpredict",
                                  description=__doc__.split("\n\n")[0])
@@ -94,6 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_c.add_argument("--module", required=True, help="importable module path")
     p_c.add_argument("--name", required=True, help="class or object in that module")
     p_c.add_argument("--protocol", choices=sorted(_PROTOCOLS), default="WorldModel")
+
+    p_v = sub.add_parser("viz", help="render what an engine imagines (HTML)")
+    p_v.add_argument("--engine", required=True, choices=["lewm", "mlp", "concept"])
+    p_v.add_argument("--demo", action="store_true",
+                     help="train briefly on a synthetic world, then dream along it")
+    p_v.add_argument("--out", help="HTML path (default awpredict-dream-<engine>.html)")
+    p_v.add_argument("--steps", type=int, default=6, help="imagined steps (default 6)")
     return ap
 
 
@@ -116,7 +175,8 @@ def main(argv: "list[str] | None" = None) -> int:
     if not args.cmd:
         build_parser().print_help()
         return 2
-    return {"engines": cmd_engines, "conforms": cmd_conforms}[args.cmd](args)
+    return {"engines": cmd_engines, "conforms": cmd_conforms,
+            "viz": cmd_viz}[args.cmd](args)
 
 
 if __name__ == "__main__":

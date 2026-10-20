@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 — 2026-10-20
+
+- `awpredict.viz`: a dream visualizer for any WorldModel engine — open-loop
+  imagination and one-step predictions scored against the copy-last baseline,
+  a 2D PCA of the latent trajectory, and a decoded filmstrip (LeWorldModel) or
+  latent heatmap, rendered to one self-contained HTML page.
+- `awpredict viz --engine lewm|mlp|concept --demo`: trains on a synthetic world
+  and writes the page. Exit 0 written, 1 no rollout, 2 could not run.
+- `MLPWorldModel.predict_latent(z, action)`: the vector-space step `predict`
+  (which answers in state hashes) could not provide.
+
 ## 0.1.1 — 2026-10-04
 
 - The Problem contract: `ProblemSpec`, a `Scorer` that can refuse, and one record
