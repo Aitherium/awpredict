@@ -28,7 +28,8 @@ def cmd_engines(args) -> int:
     missing' sends someone to install what they already have.
     """
     rows = []
-    for name, mod in (("lewm", "awpredict.core.lewm"), ("mlp", "awpredict.core.mlp")):
+    for name, mod in (("lewm", "awpredict.core.lewm"), ("mlp", "awpredict.core.mlp"),
+                      ("concept", "awpredict.core.concept")):
         try:
             m = importlib.import_module(mod)
         except Exception as exc:

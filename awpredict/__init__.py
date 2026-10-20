@@ -11,6 +11,9 @@ One package, two engines, N environment adapters:
     is the same engine the solving agent runs, not a cut-down demo of it —
     the goal of this package is to give you everything needed to bootstrap
     your own world model, not a subset of it.
+  * ``awpredict.core.concept.ConceptWorldModel`` — next-concept JEPA over
+    embedding sequences (product/residual VQ concept vocabulary + SIGReg);
+    ``plan`` ranks candidate continuations, e.g. parallel drafts.
   * ``awpredict.core.mlp.MLPWorldModel`` — an embedding-MLP transition
     model (tabular → hybrid → neural).
 
@@ -35,7 +38,7 @@ from awpredict.contracts import (
     conforms,
 )
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "Attempt",
