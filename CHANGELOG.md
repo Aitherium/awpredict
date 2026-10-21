@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `awpredict.adapters.routing_env.RoutingEnv`: mixture-of-experts routing as an
+  EnvironmentAdapter - observe the last ubatch's per-layer experts, act with a
+  candidate warm set, reward = the next ubatch's recall. Reads AXRL routing logs
+  (`read_axrl`, with rotation), dependency-free.
+
 ## 0.1.4 — 2026-10-20
 
 - `awpredict.viz`: a dream visualizer for any WorldModel engine — open-loop
