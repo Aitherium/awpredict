@@ -448,6 +448,24 @@ z = model.encode(state)
 pred = model.predict(z, action)
 print(model.surprise(state, action, next_state))
 </code></pre>
+<h2>See what a model imagines</h2>
+
+<pre><code>```bash
+awpredict viz --engine lewm --demo --out dream.html   # also: mlp, concept
+</code></pre>
+<p><code>--demo</code> trains a small engine on a synthetic world (a moving block for <code>lewm</code>, a
+drifting point or vector for <code>mlp</code>/<code>concept</code>) and writes one self-contained HTML
+page: the open-loop dream next to the real sequence (a decoded filmstrip when the
+engine can decode to a grid, a latent heatmap otherwise), the latent trajectory in
+2D, and every error beside the copy-last baseline (predict that nothing changes).
+On your own trained engine:</p>
+
+<pre><code>```python
+from awpredict.viz import dream_report, render_html
+
+report = dream_report(model, observations, actions, steps=6)
+open(&quot;dream.html&quot;, &quot;w&quot;, encoding=&quot;utf-8&quot;).write(render_html(report))
+</code></pre>
 <h2>Why this exists</h2>
 <p>The goal is to help someone bootstrap their own world model — a working
 engine, a planner, an optional value head, a contract to write your own
