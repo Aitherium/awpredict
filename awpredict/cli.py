@@ -1,7 +1,8 @@
 """Command line over awpredict: world-model engines and the contracts they satisfy.
 
   engines   which engines can actually construct here, and why not if they cannot
-  conforms  does a class satisfy WorldModel or EnvironmentAdapter, and what is missing
+  conforms  does a class satisfy WorldModel, EnvironmentAdapter or
+            GenerativeWorldModel, and what is missing
   viz       see what an engine imagines: dream filmstrip/heatmap + error vs copy-last
 
 --json for machine-readable output.
@@ -18,7 +19,8 @@ from typing import List
 from . import contracts
 
 _PROTOCOLS = {"WorldModel": contracts.WorldModel,
-              "EnvironmentAdapter": contracts.EnvironmentAdapter}
+              "EnvironmentAdapter": contracts.EnvironmentAdapter,
+              "GenerativeWorldModel": contracts.GenerativeWorldModel}
 
 
 def cmd_engines(args) -> int:

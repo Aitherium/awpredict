@@ -1,4 +1,4 @@
-"""World-model contracts: the two protocols every engine and environment obeys.
+"""World-model contracts: the protocols every engine, environment and renderer obeys.
 
 These are runtime-checkable Protocols, written to match what the shipped
 engines ACTUALLY expose today (awpredict.core.lewm.LeWorldModel, the JEPA
@@ -437,3 +437,166 @@ class Outcome:
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+# =============================================================================
+# The GENERATIVE contract — a world model that RENDERS, not only predicts
+# =============================================================================
+#
+# Everything above learns dynamics over whatever observation space an adapter
+# hands it: an ARC grid, an embedding vector. That is enough to predict, and
+# not enough to SHOW anything. A Genie-class system is asked for something
+# else — a sentence in, a real-time steerable frame with its own audio out —
+# and a latent predictor answers none of it.
+#
+# What such a system needs is small, and deliberately NOT a subtype of
+# ``WorldModel``: a video or image backend has no honest latent to
+# ``encode``, and a contract that made it fake one would be a contract that
+# rewards lying. A backend implements whichever protocols it actually
+# satisfies; the two compose at the RECORD level — an
+# ``EnvironmentAdapter`` supplies the action, the generative model supplies
+# the next ``Frame``, and the pair becomes one ``Transition``.
+#
+# Status, stated rather than implied: as of 2026-10-27 NOTHING implements
+# ``GenerativeWorldModel`` in this package OR in the monorepo, and Genie has no
+# public API. This is a specified target. The backends that will implement it
+# belong in ``AitherOS/lib/worldgen`` (engine, still, video, replay, genie) and
+# do not exist yet; when they do they obey the same rule as every engine here:
+# ``ok == False`` plus a ``Refusal`` when they cannot render — never a
+# fabricated frame, never a silent black one.
+
+
+@dataclass(frozen=True)
+class Frame:
+    """One control-plane record for a rendered frame.
+
+    Payloads do NOT travel in this object. ``image_ref`` / ``audio_ref`` /
+    ``depth_ref`` name where the bytes are: a side-channel id on a WebSocket,
+    a path, or a URL. Inlining a 4 MB frame into JSON is how a stream becomes
+    a stall, and base64 in a dict is indistinguishable from a bug when it
+    fails. An empty ref means "no payload of this kind", never "zero bytes".
+    """
+
+    frame_id: int
+    ts: float
+    width: int
+    height: int
+    world_id: str = ""
+    codec: str = "image/jpeg"
+    image_ref: str = ""
+    audio_ref: str = ""
+    audio_codec: str = ""
+    depth_ref: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        """What makes this frame unusable downstream (empty == usable)."""
+        out: List[str] = []
+        if self.frame_id < 0:
+            out.append("frame_id must be >= 0")
+        if self.width <= 0 or self.height <= 0:
+            out.append(f"frame geometry must be positive, got {self.width}x{self.height}")
+        if not self.image_ref and not self.audio_ref:
+            out.append("a Frame carries an image_ref or an audio_ref — never neither")
+        return out
+
+
+@dataclass(frozen=True)
+class Action:
+    """A control input to a continuous 3D world.
+
+    Axes are normalized to [-1, 1] so a keyboard, a gamepad and a policy all
+    speak one vocabulary; ``kind`` is the open-ended part (``move``, ``look``,
+    ``interact``, ``idle``, or an engine-specific verb).
+    """
+
+    kind: str = "idle"
+    forward: float = 0.0
+    strafe: float = 0.0
+    yaw: float = 0.0
+    pitch: float = 0.0
+    target: str = ""
+    text: str = ""
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Steer:
+    """A natural-language edit to the world, in Genie's sense.
+
+    ``ttl_frames`` bounds how long the edit holds: 0 means "until replaced",
+    which is what an interactive session wants and what a replay must record,
+    because an unbounded edit makes two otherwise identical runs differ.
+    """
+
+    text: str
+    ttl_frames: int = 0
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        """What makes this edit meaningless (empty == usable)."""
+        out: List[str] = []
+        if not self.text.strip():
+            out.append("Steer.text must say what to change")
+        if self.ttl_frames < 0:
+            out.append("Steer.ttl_frames must be >= 0")
+        return out
+
+    def __post_init__(self) -> None:
+        issues = self.problems()
+        if issues:
+            raise ValueError("; ".join(issues))
+
+
+@dataclass(frozen=True)
+class StateDigest:
+    """The engine's authoritative state, sent alongside a frame.
+
+    This is the half a world model does not have: collision, position,
+    objectives. Keeping it on the wire is what lets the engine stay the
+    symbolic twin when the model's object permanence drifts.
+    """
+
+    ts: float
+    world_id: str = ""
+    position: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    heading: float = 0.0
+    entities: Tuple[Dict[str, Any], ...] = ()
+    objectives: Tuple[str, ...] = ()
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class GenerativeWorldModel(Protocol):
+    """A model that renders a world: render → steer → audio.
+
+    Standalone on purpose (see the section comment above). A backend that ALSO
+    learns latent dynamics implements ``WorldModel`` as well; the contracts do
+    not nest.
+
+    ``mode`` says which half of the frame the model owns, so a consumer never
+    has to guess:
+
+      * ``"engine"`` — the model contributes nothing; the engine renders.
+      * ``"backdrop"`` — the model fills what the camera cannot reach.
+      * ``"frame"``  — the model owns the whole frame.
+      * ``"replay"`` — recorded frames; deterministic by construction.
+    """
+
+    ok: bool
+    mode: str
+
+    def render(self, state: "StateDigest", action: "Action",
+               *args: Any, **kwargs: Any) -> Optional["Frame"]:
+        """Produce the next frame for this state and action, or None when degraded."""
+
+    def steer(self, text: str, *args: Any, **kwargs: Any) -> bool:
+        """Accept a natural-language edit. True when the backend took it.
+
+        A backend that cannot honour a prompt returns False and changes
+        nothing — it never silently renders the old world and reports success.
+        """
+
+    def audio(self, *args: Any, **kwargs: Any) -> Optional["Frame"]:
+        """The audio track for the current world, or None when this backend has none."""
+
