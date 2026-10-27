@@ -600,3 +600,232 @@ class GenerativeWorldModel(Protocol):
     def audio(self, *args: Any, **kwargs: Any) -> Optional["Frame"]:
         """The audio track for the current world, or None when this backend has none."""
 
+
+# =============================================================================
+# The MOTION contract — animation as bone rotations, never as pixels
+# =============================================================================
+#
+# A pixel-generating world model cannot animate a character. It has no skeleton, no
+# collision, no continuity between frames: the silhouette drifts, and a game needs the
+# body to be the same body after the camera turns around.
+#
+# So motion is the one thing a generative model should NOT own frame-to-frame. What it can
+# do is PROPOSE motion — a track of bone rotations with explicit times — which an engine
+# retargets onto a rig it already has and plays through its own mixer at full framerate,
+# with physics, damage and saves intact.
+#
+# Same rule as everywhere else here: a track is either present and valid or the backend says
+# so. There is no "approximate skeleton" that quietly animates the wrong bone.
+
+
+@dataclass(frozen=True)
+class BoneKey:
+    """One bone's rotation at one instant. Quaternion is ``(x, y, z, w)``."""
+
+    bone: str
+    t: float
+    quat: Tuple[float, float, float, float]
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.bone:
+            out.append("BoneKey.bone is required")
+        if len(self.quat) != 4:
+            out.append(f"BoneKey.quat must be (x, y, z, w), got {len(self.quat)} components")
+        elif not all(isinstance(v, (int, float)) for v in self.quat):
+            out.append("BoneKey.quat components must be numbers")
+        if self.t < 0:
+            out.append("BoneKey.t must be >= 0")
+        return out
+
+
+@dataclass(frozen=True)
+class PoseTrack:
+    """A whole animation: which bones, and their keys over time.
+
+    ``bones`` is declared so a consumer can retarget by name BEFORE trusting any key — an
+    engine that maps bones at playback time and discovers a typo at frame 40 is an engine
+    that plays the previous pose and looks fine.
+    """
+
+    track_id: str
+    duration: float
+    bones: Tuple[str, ...]
+    keys: Tuple[BoneKey, ...]
+    fps: float = 30.0
+    loop: bool = False
+    expressions: Tuple["ExpressionKey", ...] = ()
+    expression_names: Tuple[str, ...] = ()
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.track_id:
+            out.append("PoseTrack.track_id is required")
+        if self.duration <= 0:
+            out.append("PoseTrack.duration must be > 0")
+        if self.fps <= 0:
+            out.append("PoseTrack.fps must be > 0")
+        if not self.bones:
+            out.append("PoseTrack declares no bones")
+        declared = set(self.bones)
+        for key in self.keys:
+            out.extend(f"key {key.bone}@{key.t}: {p}" for p in key.problems())
+            if key.bone and key.bone not in declared:
+                out.append(f"key names undeclared bone {key.bone!r}")
+            if self.duration > 0 and key.t > self.duration:
+                out.append(f"key {key.bone}@{key.t} is past the track's duration")
+        faces = set(self.expression_names)
+        for key in self.expressions:
+            out.extend(f"expression {key.expression}@{key.t}: {p}" for p in key.problems())
+            if key.expression and key.expression not in faces:
+                out.append(f"expression key names undeclared expression {key.expression!r}")
+            if self.duration > 0 and key.t > self.duration:
+                out.append(f"expression {key.expression}@{key.t} is past the track's duration")
+        return out
+
+    def bone_keys(self, bone: str) -> Tuple[BoneKey, ...]:
+        """Every key for one bone, in time order."""
+        return tuple(sorted((k for k in self.keys if k.bone == bone), key=lambda k: k.t))
+
+    def expression_keys(self, expression: str) -> Tuple["ExpressionKey", ...]:
+        """Every key for one expression, in time order."""
+        return tuple(sorted((k for k in self.expressions if k.expression == expression),
+                            key=lambda k: k.t))
+
+
+@runtime_checkable
+class GenerativeMotion(Protocol):
+    """A source of animation: ask for an intent, get bone rotations or nothing.
+
+    Deliberately not a ``GenerativeWorldModel``: a pose track is not a frame. The pair
+    compose at the engine, which renders the body it always had with motion a model
+    proposed.
+    """
+
+    ok: bool
+
+    def sample(self, state: "StateDigest", intent: str,
+               *args: Any, **kwargs: Any) -> Optional["PoseTrack"]:
+        """A track for this intent, or None when this source has none."""
+
+    def names(self) -> Sequence[str]:
+        """The intents this source can actually produce."""
+
+
+@dataclass(frozen=True)
+class ExpressionKey:
+    """One facial expression at one instant, as a morph weight in [0, 1].
+
+    Expressions are blendshape weights, not bones, because that is what a rigged face
+    actually exposes (VRM: ``happy``/``angry``/``sad``/``relaxed``/``surprised``, the
+    visemes ``aa ih ou ee oh``, ``blink``). Names are NOT a fixed enum here — a rig may
+    declare its own — so a track declares the ones it uses and a key must name one of them.
+    """
+
+    expression: str
+    t: float
+    weight: float
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.expression:
+            out.append("ExpressionKey.expression is required")
+        if self.t < 0:
+            out.append("ExpressionKey.t must be >= 0")
+        if not (0.0 <= float(self.weight) <= 1.0):
+            out.append(f"ExpressionKey.weight must be in [0,1], got {self.weight!r}")
+        return out
+
+
+@dataclass(frozen=True)
+class SequenceStep:
+    """One beat of a sequence: which motion, when it starts, how long it runs."""
+
+    intent: str
+    start: float
+    duration: float
+    blend_in: float = 0.0
+    expression: str = ""
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.intent:
+            out.append("SequenceStep.intent is required")
+        if self.start < 0:
+            out.append("SequenceStep.start must be >= 0")
+        if self.duration <= 0:
+            out.append("SequenceStep.duration must be > 0")
+        if self.blend_in < 0:
+            out.append("SequenceStep.blend_in must be >= 0")
+        if self.blend_in > max(self.duration, 0):
+            out.append("SequenceStep.blend_in cannot exceed its duration")
+        return out
+
+    @property
+    def end(self) -> float:
+        return self.start + self.duration
+
+
+@dataclass(frozen=True)
+class SequenceEvent:
+    """A cue at a time: sound, a line of dialogue, damage, a spawn.
+
+    The engine fires these on its own clock; a sequence that carries its cues can be
+    replayed exactly, which is why they live in the data and not in a callback list.
+    """
+
+    t: float
+    kind: str
+    payload: Dict[str, Any] = field(default_factory=dict)
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if self.t < 0:
+            out.append("SequenceEvent.t must be >= 0")
+        if not self.kind:
+            out.append("SequenceEvent.kind is required")
+        return out
+
+
+@dataclass(frozen=True)
+class MotionSequence:
+    """Several motions in order, with the cues that belong with them.
+
+    A sequence is data, not a player: the engine asks ``step_at(t)`` which motion is active
+    and ``events_between(a, b)`` what fired, and plays the body it already has.
+    """
+
+    sequence_id: str
+    steps: Tuple[SequenceStep, ...]
+    events: Tuple[SequenceEvent, ...] = ()
+    loop: bool = False
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def duration(self) -> float:
+        return max((s.end for s in self.steps), default=0.0)
+
+    def problems(self) -> List[str]:
+        out: List[str] = []
+        if not self.sequence_id:
+            out.append("MotionSequence.sequence_id is required")
+        if not self.steps:
+            out.append("MotionSequence has no steps")
+        for index, step in enumerate(self.steps):
+            out.extend(f"step {index}: {p}" for p in step.problems())
+        for index, event in enumerate(self.events):
+            out.extend(f"event {index}: {p}" for p in event.problems())
+        if self.duration > 0 and any(e.t > self.duration for e in self.events):
+            out.append("a SequenceEvent fires past the sequence's duration")
+        return out
+
+    def step_at(self, t: float) -> Optional[SequenceStep]:
+        """The step active at ``t``, or None between steps. Later steps win an overlap."""
+        active = [s for s in self.steps if s.start <= t < s.end]
+        return max(active, key=lambda s: s.start) if active else None
+
+    def events_between(self, start: float, end: float) -> Tuple[SequenceEvent, ...]:
+        """Cues in ``[start, end)``, in time order — the window a frame actually covers."""
+        return tuple(sorted((e for e in self.events if start <= e.t < end), key=lambda e: e.t))
+
