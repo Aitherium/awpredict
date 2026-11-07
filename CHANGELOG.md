@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5] - 2026-11-06
+
+### Added
+
+- **motion**: animation as bone rotations and expression weights (ba1086e155)
+- **world-stream**: a generative world-model contract for engines that keep the truth (55a82498f0)
+
 ## Unreleased
 
 - `awpredict.adapters.routing_env.RoutingEnv`: mixture-of-experts routing as an
