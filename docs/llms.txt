@@ -10,10 +10,6 @@ An agent that cannot anticipate its environment can only react. Every framework 
 pip install git+https://github.com/Aitherium/awpredict.git
 ```
 
-## In Claude Code
-
-- skill: `/awpredict`
-
 ## Use it in 30 seconds
 
 Wrap an environment you already have and ask it what happens next.
