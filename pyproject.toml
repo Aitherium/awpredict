@@ -13,9 +13,16 @@ build-backend = "setuptools.build_meta"
 # `awm` is the shape that already cost this repo a scare with AitherEvents.py
 # beside AitherEventSpine.py.
 name = "awpredict"
-version = "0.1.5"
+version = "0.1.6"
 description = "A small, dependency-light world-model package: LeWM JEPA + MLP engines, environment adapters"
 license = {text = "MIT"}
+# Who owns the PyPI project, stated in the METADATA a wheel carries. publish-brick.yml
+# refuses to publish over a name whose live PyPI record names nobody of ours: `awpredict`
+# 0.1.0-0.1.5 were uploaded before this field existed, so the lane read an empty owner
+# string and refused every run (measured 2026-11-22, run 44972396926, "PyPI already has a
+# project named awpredict and it is NOT ours"). The 0.1.6 metadata below is what makes the
+# project recognisably ours from now on; the same block every sibling already carries.
+authors = [{ name = "Aitherium", email = "hello@aitherium.com" }]
 requires-python = ">=3.10"
 # torch/numpy are OPTIONAL at import time (engines degrade loudly without them);
 # they are listed here because every real deployment wants them.
@@ -27,6 +34,15 @@ torch = ["torch>=2.0", "numpy>=1.24"]
 # wheel for `.[dev]` (2026-10-04), fell back to the bare package, and three
 # numpy-only test modules failed to import. Torch tests importorskip; use .[torch].
 dev = ["numpy>=1.24", "pytest>=7.0"]
+
+# Where the project lives, in the same shape every sibling ships. Homepage is what makes
+# the record name Aitherium for publish-brick.yml's ownership test, which reads PyPI's
+# `project_urls` (a stranger's package would name someone else).
+[project.urls]
+Homepage = "https://github.com/Aitherium/awpredict"
+Documentation = "https://github.com/Aitherium/awpredict#readme"
+Repository = "https://github.com/Aitherium/awpredict.git"
+Issues = "https://github.com/Aitherium/awpredict/issues"
 
 [tool.setuptools.packages.find]
 include = ["awpredict*"]

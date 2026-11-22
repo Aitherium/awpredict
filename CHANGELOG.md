@@ -1,18 +1,28 @@
 # Changelog
 
+## [0.1.6] - 2026-11-22
+
+### Added
+
+- `awpredict.adapters.routing_env.RoutingEnv`: mixture-of-experts routing as an
+  EnvironmentAdapter - observe the last ubatch's per-layer experts, act with a
+  candidate warm set, reward = the next ubatch's recall. Reads AXRL routing logs
+  (`read_axrl`, with rotation), dependency-free.
+
+### Fixed
+
+- The wheel and sdist now carry `authors` and a `[project.urls]` Homepage, so the
+  PyPI project is recognisably Aitherium's. Without them the publish lane's
+  ownership test read an empty owner string off PyPI's record for 0.1.0-0.1.5 and
+  refused every run (2026-11-22, run 44972396926) - a project of ours that could
+  never publish again.
+
 ## [0.1.5] - 2026-11-06
 
 ### Added
 
 - **motion**: animation as bone rotations and expression weights (ba1086e155)
 - **world-stream**: a generative world-model contract for engines that keep the truth (55a82498f0)
-
-## Unreleased
-
-- `awpredict.adapters.routing_env.RoutingEnv`: mixture-of-experts routing as an
-  EnvironmentAdapter - observe the last ubatch's per-layer experts, act with a
-  candidate warm set, reward = the next ubatch's recall. Reads AXRL routing logs
-  (`read_axrl`, with rotation), dependency-free.
 
 ## 0.1.4 — 2026-10-20
 
